@@ -1,0 +1,478 @@
+openapi: 3.0.0
+info:
+  title: Auth Platform API
+  description: 認証基盤API - Phase 1実装完了（本番運用最小限のAPI）
+  version: 1.0.0
+  contact:
+    name: Auth Platform Team
+
+servers:
+  - url: http://localhost:9000
+    description: Development server
+
+tags:
+  - name: Health
+    description: ヘルスチェック・監視
+  - name: Authentication
+    description: 認証関連のAPI
+  - name: User
+    description: ユーザー情報管理
+  - name: Password
+    description: パスワード管理
+
+paths:
+  /:
+    get:
+      tags:
+        - Health
+      summary: ルートエンドポイント
+      description: アプリケーションが正常に動作しているか確認
+      responses:
+        '200':
+          description: 正常
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Auth Platform is running!
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: ヘルスチェック
+      description: サービスの健全性を確認します
+      responses:
+        '200':
+          description: 正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: auth-platform
+                  timestamp:
+                    type: integer
+                    format: int64
+                    example: 1769673121337
+
+  /ready:
+    get:
+      tags:
+        - Health
+      summary: レディネスチェック
+      description: サービスがリクエストを受け付ける準備ができているか確認します
+      responses:
+        '200':
+          description: 準備完了
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  database:
+                    type: string
+                    example: connected
+
+  /api/register:
+    post:
+      tags:
+        - Authentication
+      summary: ユーザー登録
+      description: |
+        新しいユーザーアカウントを作成します
+        
+        **認証不要**: このエンドポイントは認証トークンなしでアクセスできます
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: 登録成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: 不正なリクエスト
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: ユーザーが既に存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/login:
+    post:
+      tags:
+        - Authentication
+      summary: ログイン
+      description: |
+        ユーザー認証を行い、アクセストークンとリフレッシュトークンを発行します
+        
+        **認証不要**: このエンドポイントは認証トークンなしでアクセスできます
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 不正なリクエスト
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: レート制限超過
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/refresh-token:
+    post:
+      tags:
+        - Authentication
+      summary: トークンリフレッシュ
+      description: |
+        リフレッシュトークンを使用して新しいアクセストークンを取得します
+        
+        **認証不要**: リフレッシュトークンのみで新しいアクセストークンを取得できます
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: リフレッシュ成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 不正なリクエスト
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 無効または期限切れのトークン
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/logout:
+    post:
+      tags:
+        - Authentication
+      summary: ログアウト
+      description: リフレッシュトークンを無効化してログアウトします
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '200':
+          description: ログアウト成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '400':
+          description: 不正なリクエスト
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/user/me:
+    get:
+      tags:
+        - User
+      summary: ユーザー情報取得
+      description: ログイン中のユーザー情報を取得します
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '401':
+          description: 認証失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: ユーザーが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/password/reset-request:
+    post:
+      tags:
+        - Password
+      summary: パスワードリセット要求
+      description: |
+        パスワードリセット用のトークンをメールで送信します
+        
+        **認証不要**: パスワードを忘れた場合に使用するため、認証なしでアクセスできます
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequestRequest'
+      responses:
+        '200':
+          description: リセットメール送信成功（セキュリティ上、ユーザーの存在有無に関わらず200を返す）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password reset email sent
+        '400':
+          description: 不正なリクエスト
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/password/reset-confirm:
+    post:
+      tags:
+        - Password
+      summary: パスワードリセット確認
+      description: |
+        リセットトークンを使用して新しいパスワードを設定します
+        
+        **認証不要**: メールで受け取ったトークンのみで実行できます
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+      responses:
+        '200':
+          description: パスワードリセット成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Password reset successfully
+        '400':
+          description: 無効または期限切れのトークン
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: ユーザーのメールアドレス
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: ユーザーのパスワード（8文字以上推奨）
+          example: SecurePass123!
+
+    RegisterResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: User registered successfully
+        userId:
+          type: integer
+          format: int64
+          description: 作成されたユーザーのID
+          example: 1
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: ユーザーのメールアドレス
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          description: ユーザーのパスワード
+          example: SecurePass123!
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWTアクセストークン（有効期限：15-30分）
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refreshToken:
+          type: string
+          description: リフレッシュトークン（有効期限：7-30日）
+          example: abc123def456ghi789jkl012mno345pqr678
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: リフレッシュトークン
+          example: abc123def456ghi789jkl012mno345pqr678
+
+    LogoutRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: 無効化するリフレッシュトークン
+          example: abc123def456ghi789jkl012mno345pqr678
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        status:
+          type: string
+          example: active
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-01-29T07:00:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-01-29T07:00:00Z'
+
+    PasswordResetRequestRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: パスワードをリセットするユーザーのメールアドレス
+          example: user@example.com
+
+    PasswordResetConfirmRequest:
+      type: object
+      required:
+        - token
+        - newPassword
+      properties:
+        token:
+          type: string
+          description: メールで受け取ったリセットトークン
+          example: abc123reset456token789
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+          description: 新しいパスワード（8文字以上推奨）
+          example: NewSecurePass123!
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: エラーメッセージ
+          example: Invalid credentials
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWTアクセストークンを使用した認証。Authorizationヘッダーに 'Bearer <token>' の形式で指定してください。

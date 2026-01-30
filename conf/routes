@@ -1,0 +1,24 @@
+# An example controller showing how to use dependency injection
+GET     /                           controllers.HomeController.index
+
+# Health Check
+GET     /health                     controllers.HealthController.health()
+GET     /ready                      controllers.HealthController.readiness()
+
+# AuthController routes
+POST    /api/register               controllers.AuthController.register
+POST    /api/login                  controllers.AuthController.login
+POST    /api/refresh-token          controllers.AuthController.refresh
+POST    /api/logout                 controllers.AuthController.logout
+
+# User Info
+GET     /api/user/me                controllers.UserController.getUserInfo()
+
+# Password Reset
+POST    /api/password/reset-request controllers.PasswordController.resetRequest
+POST    /api/password/reset-confirm controllers.PasswordController.resetConfirm
+
+# Swagger API Documentation
+GET     /api-docs                   controllers.SwaggerUIController.index
+GET     /api-docs/swagger.json      controllers.SwaggerController.specs
+GET     /swagger-ui/*file           controllers.SwaggerUIController.swaggerUIAssets(file: String)
