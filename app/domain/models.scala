@@ -41,15 +41,15 @@ object models {
     id: Option[Long] = None,
     userId: UserId,
     authType: AuthType,
-    identifier: Option[String],
-    secret: Option[String],
-    meta: Option[String], // JSONB will be stored as String here
+    identifier: Option[String] = None,
+    secret: Option[String] = None,
+    meta: Option[String] = None, // JSONB will be stored as String here
     enabled: Boolean = true,
     priority: Int = 0,
     failedCount: Int = 0,
     lockedUntil: Option[LocalDateTime] = None,
-    createdAt: Option[LocalDateTime] = None,
-    updatedAt: Option[LocalDateTime] = None
+    createdAt: Option[LocalDateTime] = Some(LocalDateTime.now()),
+    updatedAt: Option[LocalDateTime] = Some(LocalDateTime.now())
   )
 
   // 6.2 users
@@ -57,8 +57,8 @@ object models {
     id: Option[UserId] = None,
     email: String,
     status: String,
-    createdAt: Option[LocalDateTime] = None,
-    updatedAt: Option[LocalDateTime] = None
+    createdAt: Option[LocalDateTime] = Some(LocalDateTime.now()),
+    updatedAt: Option[LocalDateTime] = Some(LocalDateTime.now())
   )
 
   // 6.4 refresh_tokens
@@ -67,7 +67,7 @@ object models {
     userId: UserId,
     tokenHash: String,
     expiresAt: LocalDateTime,
-    createdAt: Option[LocalDateTime] = None
+    createdAt: Option[LocalDateTime] = Some(LocalDateTime.now())
   )
 
   // 6.5 login_history
@@ -78,7 +78,7 @@ object models {
     userAgent: Option[String],
     success: Boolean,
     action: Option[String] = None,
-    createdAt: Option[LocalDateTime] = None
+    createdAt: Option[LocalDateTime] = Some(LocalDateTime.now())
   )
 
   // 6.6 recovery_tokens

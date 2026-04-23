@@ -21,6 +21,7 @@ lazy val root = (project in file("."))
       "org.playframework"  %% "play-slick"     % "6.2.0",
       "com.typesafe.slick" %% "slick-hikaricp" % "3.6.1",
       "org.postgresql"      % "postgresql"     % "42.7.9",
+      "com.h2database"      % "h2"             % "2.2.224" % Test,
       // Auth
       "com.github.jwt-scala" %% "jwt-play" % "11.0.3",
       // Did not find a specific webauthn-scala library for Play 3, using a generic one

@@ -20,6 +20,14 @@ object AuditActor {
     success: Boolean
   ) extends Command
 
+  case class LogEvent(
+    userId: UserId,
+    action: String,
+    details: Option[String] = None,
+    ipAddress: Option[String] = None,
+    userAgent: Option[String] = None
+  ) extends Command
+
   // Internal message for pipeToSelf completion
   private case class AuditLogCompleted(message: String) extends Command
 
@@ -32,11 +40,27 @@ object AuditActor {
             userId = userId,
             ipAddress = ipAddress,
             userAgent = userAgent,
-            success = success
+            success = success,
+            action = Some("login")
           )
           context.pipeToSelf(authRepository.createLoginHistory(loginHistory)) {
             case Success(_)  => AuditLogCompleted("Login history recorded successfully.")
             case Failure(ex) => AuditLogCompleted(s"Failed to record login history: ${ex.getMessage}")
+          }
+          Behaviors.same
+
+        case LogEvent(userId, action, details, ipAddress, userAgent) =>
+          context.log.info(s"AuditActor: Logging event '$action' for user ID: ${userId.value}")
+          val loginHistory = LoginHistory(
+            userId = userId,
+            ipAddress = ipAddress,
+            userAgent = userAgent,
+            success = true,
+            action = Some(action)
+          )
+          context.pipeToSelf(authRepository.createLoginHistory(loginHistory)) {
+            case Success(_)  => AuditLogCompleted(s"Event '$action' recorded successfully.")
+            case Failure(ex) => AuditLogCompleted(s"Failed to record event '$action': ${ex.getMessage}")
           }
           Behaviors.same
 

@@ -59,6 +59,9 @@ class AuthRepository @Inject() (
       refreshTokens returning refreshTokens.map(_.id) into ((token, id) => token.copy(id = Some(id))) += refreshToken
     )
 
+  def findRefreshTokensByUserId(userId: UserId): Future[Seq[RefreshToken]] =
+    db.run(refreshTokens.filter(_.userId === userId).result)
+
   def findRefreshToken(userId: UserId, tokenHash: String): Future[Option[RefreshToken]] =
     db.run(refreshTokens.filter(t => t.userId === userId && t.tokenHash === tokenHash).result.headOption)
 
@@ -82,6 +85,9 @@ class AuthRepository @Inject() (
   // --- RecoveryToken operations ---
   def createRecoveryToken(recoveryToken: RecoveryToken): Future[Int] =
     db.run(recoveryTokens += recoveryToken)
+
+  def findRecoveryTokensByUserId(userId: UserId): Future[Seq[RecoveryToken]] =
+    db.run(recoveryTokens.filter(_.userId === userId).result)
 
   def findRecoveryToken(userId: UserId, tokenHash: String): Future[Option[RecoveryToken]] =
     db.run(recoveryTokens.filter(t => t.userId === userId && t.tokenHash === tokenHash).result.headOption)

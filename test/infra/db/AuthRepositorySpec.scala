@@ -3,38 +3,62 @@ package infra.db
 import org.scalatestplus.play.PlaySpec
 import org.scalatestplus.play.guice.GuiceOneAppPerSuite
 import play.api.db.slick.DatabaseConfigProvider
-import play.api.test.{DefaultAwaitTimeout, FakeApplicationFactory, Injecting}
+import play.api.test.{DefaultAwaitTimeout, Injecting}
 import slick.jdbc.JdbcProfile
 import slick.jdbc.H2Profile.api._
 import domain.models._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.concurrent.Await
+import scala.concurrent.{Await, Future}
 import java.time.LocalDateTime
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
+
+import play.api.Application
+import play.api.inject.guice.GuiceApplicationBuilder
 
 class AuthRepositorySpec
     extends PlaySpec
     with GuiceOneAppPerSuite
     with Injecting
     with DefaultAwaitTimeout
-    with FakeApplicationFactory {
+    with BeforeAndAfterAll
+    with BeforeAndAfterEach {
+
+  override def fakeApplication(): Application = {
+    new GuiceApplicationBuilder()
+      .configure(
+        "slick.dbs.default.profile"     -> "slick.jdbc.H2Profile$",
+        "slick.dbs.default.db.driver"   -> "org.h2.Driver",
+        "slick.dbs.default.db.url"      -> "jdbc:h2:mem:auth_test;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=FALSE",
+        "slick.dbs.default.db.user"     -> "sa",
+        "slick.dbs.default.db.password" -> "",
+        "play.evolutions.enabled"       -> "false"
+      )
+      .build()
+  }
 
   implicit val ec: ExecutionContext = app.injector.instanceOf[ExecutionContext]
   val dbConfigProvider              = app.injector.instanceOf[DatabaseConfigProvider]
   val authRepository                = app.injector.instanceOf[AuthRepository]
-  val db                            = dbConfigProvider.get[JdbcProfile].db
+  val profile                       = dbConfigProvider.get[JdbcProfile].profile
+  import profile.api._
+  val db = dbConfigProvider.get[JdbcProfile].db
 
-  val authTable = new AuthTable(dbConfigProvider.get[JdbcProfile].profile)
-  import authTable._
+  val authTable = new AuthTable(profile)
+  import authTable.*
+
+  // Helper to run Future
+  def await[T](f: Future[T]): T =
+    Await.result(f, 10.seconds)
 
   // Helper to run DB actions
-  def await[T](action: DBIOAction[T, NoStream, Effect.All]): T =
+  def awaitDB[T](action: DBIOAction[T, NoStream, Effect.All]): T =
     Await.result(db.run(action), 10.seconds)
 
   override def beforeAll(): Unit = {
     super.beforeAll()
     // Create schema
-    await(
+    awaitDB(
       DBIO.seq(
         users.schema.createIfNotExists,
         credentials.schema.createIfNotExists,
@@ -48,7 +72,7 @@ class AuthRepositorySpec
   // Clear tables before each test
   override def beforeEach(): Unit = {
     super.beforeEach()
-    await(
+    awaitDB(
       DBIO.seq(
         loginHistorys.delete,
         refreshTokens.delete,

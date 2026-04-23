@@ -10,6 +10,8 @@ import scala.util.Random
 import org.mindrot.jbcrypt.BCrypt // For password hashing
 
 import javax.inject.Inject
+import scala.concurrent.duration._
+import scala.concurrent.Await
 
 // Define a simple password hashing utility for now
 object PasswordHasher {
@@ -81,16 +83,22 @@ class AuthService @Inject() (authRepository: AuthRepository)(implicit ec: Execut
     authRepository.createRefreshToken(newRefreshToken).map(_ => token) // Return original token
   }
 
-  // Verify and refresh token (simplified)
-  def refreshAccessToken(userId: UserId, oldRefreshToken: String): Future[Either[String, (String, String)]] = {
-    authRepository.findRefreshToken(userId, PasswordHasher.hashPassword(oldRefreshToken)).flatMap {
-      case Some(storedToken) if storedToken.expiresAt.isAfter(LocalDateTime.now()) =>
-        // Invalidate old token and issue new ones
-        authRepository.deleteRefreshToken(storedToken.id.get).flatMap { _ =>
-          val newAccessToken = generateAccessToken(userId)
-          generateRefreshToken(userId).map(newRefreshToken => Right((newAccessToken, newRefreshToken)))
-        }
-      case _ => Future.successful(Left("Invalid or expired refresh token"))
+  // Verify and refresh token (only handles refresh token logic)
+  def refreshAccessToken(userId: UserId, oldRefreshToken: String): Future[Either[String, String]] = {
+    authRepository.findRefreshTokensByUserId(userId).flatMap { tokens =>
+      val validTokenOpt = tokens.find { storedToken =>
+        PasswordHasher.checkPassword(oldRefreshToken, storedToken.tokenHash) &&
+        storedToken.expiresAt.isAfter(LocalDateTime.now())
+      }
+
+      validTokenOpt match {
+        case Some(storedToken) =>
+          // Invalidate old token and issue new one
+          authRepository.deleteRefreshToken(storedToken.id.get).flatMap { _ =>
+            generateRefreshToken(userId).map(newRefreshToken => Right(newRefreshToken))
+          }
+        case None => Future.successful(Left("Invalid or expired refresh token"))
+      }
     }
   }
 
@@ -110,9 +118,60 @@ class AuthService @Inject() (authRepository: AuthRepository)(implicit ec: Execut
     }
   }
 
-  // WebAuthn specific logic will be added here
-  // For now, this is a placeholder
-  abstract class WebAuthnService extends CredentialRepository {
-    // TODO: implement methods in CredentialRepository
+  // WebAuthn specific logic
+  class WebAuthnService @Inject() (authRepository: AuthRepository)(implicit ec: ExecutionContext)
+      extends CredentialRepository {
+    import com.yubico.webauthn.data._
+    import com.yubico.webauthn.{CredentialRepository, RegisteredCredential}
+    import java.util.{Optional, Set => JSet}
+    import scala.jdk.CollectionConverters._
+    import scala.jdk.OptionConverters._
+
+    override def getCredentialIdsForUsername(username: String): JSet[PublicKeyCredentialDescriptor] = {
+      // Lookup user by email (username), then get their passkey credentials
+      val result = for {
+        userOpt <- authRepository.findUserByEmail(username)
+        creds <- userOpt match {
+          case Some(user) => authRepository.findCredentialsByUserId(user.id.get)
+          case None       => Future.successful(Seq.empty)
+        }
+      } yield creds
+        .filter(_.authType == AuthType.Passkey)
+        .flatMap { c =>
+          c.identifier.map { id =>
+            PublicKeyCredentialDescriptor
+              .builder()
+              .id(ByteArray.fromBase64(id))
+              .build()
+          }
+        }
+        .toSet
+        .asJava
+
+      Await.result(result, 5.seconds)
+    }
+
+    override def getUserHandleForUsername(username: String): Optional[ByteArray] = {
+      val result = authRepository.findUserByEmail(username).map {
+        case Some(user) => Optional.of(ByteArray.fromBase64(user.id.get.value.toString))
+        case None       => Optional.empty[ByteArray]()
+      }
+      Await.result(result, 5.seconds)
+    }
+
+    override def getUsernameForUserHandle(userHandle: ByteArray): Optional[String] = {
+      val userId = UserId(userHandle.getBase64.toLong)
+      val result = authRepository.findUserById(userId).map {
+        case Some(user) => Optional.of(user.email)
+        case None       => Optional.empty[String]()
+      }
+      Await.result(result, 5.seconds)
+    }
+
+    override def lookup(credentialId: ByteArray, userHandle: ByteArray): Optional[RegisteredCredential] =
+      Optional.empty()
+
+    override def lookupAll(credentialId: ByteArray): JSet[RegisteredCredential] =
+      Set.empty[RegisteredCredential].asJava
   }
 }

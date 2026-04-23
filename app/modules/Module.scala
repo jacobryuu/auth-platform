@@ -28,10 +28,18 @@ class Module extends AbstractModule with PekkoGuiceSupport {
     bind(new TypeLiteral[ActorSystem[?]]() {}).toProvider(classOf[TypedActorSystemProvider])
 
     // Bind typed actor references
-    bind(new TypeLiteral[ActorRef[AuthActor.Command]]() {}).toProvider(classOf[AuthActorProvider])
-    bind(new TypeLiteral[ActorRef[AuditActor.Command]]() {}).toProvider(classOf[AuditActorProvider])
-    bind(new TypeLiteral[ActorRef[RateLimitActor.Command]]() {}).toProvider(classOf[RateLimitActorProvider])
-    bind(new TypeLiteral[ActorRef[TokenActor.Command]]() {}).toProvider(classOf[TokenActorProvider])
+    bind(new TypeLiteral[ActorRef[AuthActor.Command]]() {})
+      .toProvider(classOf[AuthActorProvider])
+      .in(classOf[Singleton])
+    bind(new TypeLiteral[ActorRef[AuditActor.Command]]() {})
+      .toProvider(classOf[AuditActorProvider])
+      .in(classOf[Singleton])
+    bind(new TypeLiteral[ActorRef[RateLimitActor.Command]]() {})
+      .toProvider(classOf[RateLimitActorProvider])
+      .in(classOf[Singleton])
+    bind(new TypeLiteral[ActorRef[TokenActor.Command]]() {})
+      .toProvider(classOf[TokenActorProvider])
+      .in(classOf[Singleton])
   }
 }
 
@@ -45,10 +53,11 @@ class TypedActorSystemProvider @Inject() (classicSystem: ClassicActorSystem) ext
 class AuthActorProvider @Inject() (
   actorSystem: ActorSystem[?],
   authService: AuthService,
+  tokenActor: ActorRef[TokenActor.Command],
   ec: ExecutionContext
 ) extends Provider[ActorRef[AuthActor.Command]] {
   override def get(): ActorRef[AuthActor.Command] =
-    actorSystem.systemActorOf(AuthActor(authService)(ec), "AuthActor")
+    actorSystem.systemActorOf(AuthActor(authService, tokenActor)(ec), "AuthActor")
 }
 
 @Singleton
